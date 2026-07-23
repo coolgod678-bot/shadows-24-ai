@@ -68,10 +68,24 @@ export function PositionsTable({
     }
   }, [sellError, onClearSellError]);
 
+  const [removedIds, setRemovedIds] = useState<Record<number, true>>({});
+
   const totalCount = openPositions.length + closedPositions.length;
 
   const visibleOpen = filter === 'open' || filter === 'all' ? openPositions : [];
-  const visibleClosed = filter === 'closed' || filter === 'all' ? closedPositions : [];
+  // Filter out any positions the user has removed locally
+  const visibleClosedRaw = filter === 'closed' || filter === 'all' ? closedPositions : [];
+  const visibleClosed = visibleClosedRaw.filter((p) => !removedIds[p.contract_id]);
+
+  function handleRemove(contractId: number) {
+    setRemovedIds(prev => ({ ...prev, [contractId]: true }));
+  }
+
+  function handleClearAllClosed() {
+    const idsToRemove: Record<number, true> = {};
+    visibleClosedRaw.forEach(p => { idsToRemove[p.contract_id] = true; });
+    setRemovedIds(prev => ({ ...prev, ...idsToRemove }));
+  }
 
   return (
     <div className={cn('mt-6', className)}>
@@ -79,16 +93,21 @@ export function PositionsTable({
       <div className="grid grid-cols-3 items-center mb-3">
         <div />
         <h2 className="text-sm font-semibold text-center">Report</h2>
-        <Select value={filter} onValueChange={(value) => setFilter(value as PositionFilter)}>
-          <SelectTrigger className="w-28 ml-auto">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="open">Open ({openPositions.length})</SelectItem>
-            <SelectItem value="closed">Closed ({closedPositions.length})</SelectItem>
-            <SelectItem value="all">All ({totalCount})</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={handleClearAllClosed} disabled={visibleClosedRaw.length === 0}>
+            Clear
+          </Button>
+          <Select value={filter} onValueChange={(value) => setFilter(value as PositionFilter)}>
+            <SelectTrigger className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="open">Open ({openPositions.length})</SelectItem>
+              <SelectItem value="closed">Closed ({closedPositions.length})</SelectItem>
+              <SelectItem value="all">All ({totalCount})</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Desktop: table */}
@@ -119,6 +138,7 @@ export function PositionsTable({
                 key={`closed-${pos.contract_id}`}
                 pos={pos}
                 contractTypeLabels={contractTypeLabels}
+                onRemove={() => handleRemove(pos.contract_id)}
               />
             ))}
             {visibleOpen.length === 0 && visibleClosed.length === 0 && (
@@ -148,6 +168,7 @@ export function PositionsTable({
             key={`closed-card-${pos.contract_id}`}
             pos={pos}
             contractTypeLabels={contractTypeLabels}
+            onRemove={() => handleRemove(pos.contract_id)}
           />
         ))}
         {visibleOpen.length === 0 && visibleClosed.length === 0 && (
@@ -204,9 +225,11 @@ function OpenPositionRow({
 function ClosedPositionRow({
   pos,
   contractTypeLabels,
+  onRemove,
 }: {
   pos: ClosedPosition;
   contractTypeLabels: Record<string, string>;
+  onRemove: () => void;
 }) {
   const profit = pos.sell_price - pos.buy_price;
   const profitPct = (profit / pos.buy_price) * 100;
@@ -225,7 +248,9 @@ function ClosedPositionRow({
         {pos.sell_price.toFixed(2)}
       </TableCell>
       <ProfitCell profit={profit} profitPct={profitPct} currency="" isProfit={isProfit} />
-      <TableCell />
+      <TableCell className="text-right">
+        <Button size="sm" variant="ghost" onClick={onRemove}>Delete</Button>
+      </TableCell>
     </TableRow>
   );
 }
